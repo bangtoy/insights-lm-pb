@@ -6,7 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import Dashboard from "./pages/Dashboard";
+import KnowledgeManagement from "./pages/KnowledgeManagement";
+import ChatWithData from "./pages/ChatWithData";
 import Notebook from "./pages/Notebook";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -20,7 +21,23 @@ const AppContent = () => {
         path="/" 
         element={
           <ProtectedRoute fallback={<Auth />}>
-            <Dashboard />
+            <KnowledgeManagement />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/knowledge" 
+        element={
+          <ProtectedRoute fallback={<Auth />}>
+            <KnowledgeManagement />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/chat" 
+        element={
+          <ProtectedRoute fallback={<Auth />}>
+            <ChatWithData />
           </ProtectedRoute>
         } 
       />
