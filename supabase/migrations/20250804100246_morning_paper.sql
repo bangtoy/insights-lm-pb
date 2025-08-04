@@ -47,7 +47,7 @@
     - Add trigger function for updating timestamps
     - Add function to calculate chunk counts
 </sql>
-
+*/
 -- Enable UUID extension if not already enabled
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
