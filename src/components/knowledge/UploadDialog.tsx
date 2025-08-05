@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Upload, FileText, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { useKnowledgeFiles } from '@/hooks/useKnowledgeFiles';
+import { useFileUpload } from '@/hooks/useFileUpload';
+import { useDocumentProcessing } from '@/hooks/useDocumentProcessing';
 import { useToast } from '@/hooks/use-toast';
 
 interface UploadDialogProps {
@@ -21,7 +23,9 @@ interface UploadingFile {
 const UploadDialog = ({ open, onOpenChange }: UploadDialogProps) => {
   const [dragActive, setDragActive] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
-  const { uploadFileAsync } = useKnowledgeFiles();
+  const { uploadFileAsync, updateFile } = useKnowledgeFiles();
+  const { uploadFile, isUploading } = useFileUpload();
+  const { processDocumentAsync } = useDocumentProcessing();
   const { toast } = useToast();
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -64,76 +68,161 @@ const UploadDialog = ({ open, onOpenChange }: UploadDialogProps) => {
     return 'txt'; // Default fallback
   };
 
+  const processFileAsync = async (file: File, fileRecord: any) => {
+    try {
+      console.log('Starting file processing for:', file.name, 'file:', fileRecord.id);
+      const fileType = getFileType(file);
+
+      // Update status to uploading
+      setUploadingFiles(prev => prev.map(uf => 
+        uf.file.name === file.name ? { ...uf, progress: 25, status: 'uploading' } : uf
+      ));
+
+      // Upload the file using the same pattern as SourcesSidebar
+      const filePath = await uploadFile(file, 'knowledge-files', fileRecord.id);
+      if (!filePath) {
+        throw new Error('File upload failed - no file path returned');
+      }
+      console.log('File uploaded successfully:', filePath);
+
+      // Update file record with file path and set to processing
+      await updateFile({
+        fileId: fileRecord.id,
+        updates: {
+          file_path: filePath,
+          processing_status: 'processing'
+        }
+      });
+
+      // Update progress to show processing
+      setUploadingFiles(prev => prev.map(uf => 
+        uf.file.name === file.name ? { ...uf, progress: 75, status: 'processing' } : uf
+      ));
+
+      // Start document processing using the same webhook as sources
+      try {
+        await processDocumentAsync({
+          sourceId: fileRecord.id,
+          filePath,
+          sourceType: fileType
+        });
+        console.log('Document processing completed for:', fileRecord.id);
+        
+        // Mark as completed
+        setUploadingFiles(prev => prev.map(uf => 
+          uf.file.name === file.name ? { ...uf, progress: 100, status: 'completed' } : uf
+        ));
+      } catch (processingError) {
+        console.error('Document processing failed:', processingError);
+        
+        // Update to completed with basic info if processing fails
+        await updateFile({
+          fileId: fileRecord.id,
+          updates: {
+            processing_status: 'completed'
+          }
+        });
+        
+        // Mark as completed in UI
+        setUploadingFiles(prev => prev.map(uf => 
+          uf.file.name === file.name ? { ...uf, progress: 100, status: 'completed' } : uf
+        ));
+      }
+    } catch (error) {
+      console.error('File processing failed for:', file.name, error);
+
+      // Update status to failed
+      await updateFile({
+        fileId: fileRecord.id,
+        updates: {
+          processing_status: 'failed'
+        }
+      });
+      
+      // Mark as error in UI
+      setUploadingFiles(prev => prev.map(uf => 
+        uf.file.name === file.name ? { 
+          ...uf, 
+          progress: 0, 
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Upload failed'
+        } : uf
+      ));
+    }
+  };
   const handleFileUpload = async (files: File[]) => {
+    console.log('Processing multiple files:', files.length);
+    
+    // Initialize uploading files state
     const newUploadingFiles: UploadingFile[] = files.map(file => ({
       file,
       progress: 0,
       status: 'uploading'
     }));
-
     setUploadingFiles(newUploadingFiles);
 
-    // Process files sequentially to avoid overwhelming the system
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const fileType = getFileType(file);
-      
-      try {
-        // Update progress to show upload starting
-        setUploadingFiles(prev => prev.map((uf, index) => 
-          index === i ? { ...uf, progress: 25, status: 'uploading' } : uf
-        ));
-
-        // Upload file
-        await uploadFileAsync({
+    try {
+      // Step 1: Create all file records first
+      const fileRecords = await Promise.all(files.map(async (file) => {
+        const fileType = getFileType(file);
+        return await uploadFileAsync({
           title: file.name,
           file: file,
           file_type: fileType
         });
+      }));
 
-        // Update progress to show processing
-        setUploadingFiles(prev => prev.map((uf, index) => 
-          index === i ? { ...uf, progress: 75, status: 'processing' } : uf
-        ));
+      console.log('All file records created:', fileRecords.length);
 
-        // Simulate processing time
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      // Step 2: Process files in parallel (background)
+      const processingPromises = files.map((file, index) => 
+        processFileAsync(file, fileRecords[index])
+      );
 
-        // Mark as completed
-        setUploadingFiles(prev => prev.map((uf, index) => 
-          index === i ? { ...uf, progress: 100, status: 'completed' } : uf
-        ));
+      // Don't await - let processing happen in background
+      Promise.allSettled(processingPromises).then(results => {
+        const successful = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
 
-      } catch (error) {
-        console.error('Upload failed for file:', file.name, error);
-        setUploadingFiles(prev => prev.map((uf, index) => 
-          index === i ? { 
-            ...uf, 
-            progress: 0, 
-            status: 'error',
-            error: error instanceof Error ? error.message : 'Upload failed'
-          } : uf
-        ));
-      }
-    }
+        console.log('File processing completed:', { successful, failed });
 
-    // Show completion toast
-    const successful = uploadingFiles.filter(uf => uf.status === 'completed').length;
-    const failed = uploadingFiles.filter(uf => uf.status === 'error').length;
-
-    if (successful > 0) {
-      toast({
-        title: "Upload Complete",
-        description: `${successful} file${successful > 1 ? 's' : ''} uploaded successfully${failed > 0 ? `, ${failed} failed` : ''}`,
+        if (failed > 0) {
+          toast({
+            title: "Processing Issues",
+            description: `${failed} file${failed > 1 ? 's' : ''} had processing issues. Check the files list for details.`,
+            variant: "destructive"
+          });
+        }
       });
-    }
 
-    // Auto-close after a delay if all completed
-    if (failed === 0) {
+      // Show immediate success toast
+      toast({
+        title: "Files Added",
+        description: `${files.length} file${files.length > 1 ? 's' : ''} added and processing started`
+      });
+
+      // Auto-close after a short delay
       setTimeout(() => {
         setUploadingFiles([]);
         onOpenChange(false);
       }, 2000);
+
+    } catch (error) {
+      console.error('Error creating file records:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add files. Please try again.",
+        variant: "destructive"
+      });
+      
+      // Mark all as error
+      setUploadingFiles(prev => prev.map(uf => ({
+        ...uf,
+        progress: 0,
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Upload failed'
+      })));
+      }
     }
   };
 

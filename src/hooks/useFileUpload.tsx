@@ -7,21 +7,23 @@ export const useFileUpload = () => {
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
-  const uploadFile = async (file: File, notebookId: string, sourceId: string): Promise<string | null> => {
+  const uploadFile = async (file: File, bucket: string, sourceId: string): Promise<string | null> => {
     try {
       setIsUploading(true);
       
       // Get file extension
       const fileExtension = file.name.split('.').pop() || 'bin';
       
-      // Create file path: sources/{notebook_id}/{source_id}.{extension}
-      const filePath = `${notebookId}/${sourceId}.${fileExtension}`;
+      // Create file path based on bucket type
+      const filePath = bucket === 'knowledge-files' 
+        ? `${sourceId}.${fileExtension}`  // For knowledge files: {file_id}.{extension}
+        : `${bucket}/${sourceId}.${fileExtension}`; // For sources: {notebook_id}/{source_id}.{extension}
       
       console.log('Uploading file to:', filePath);
       
       // Upload file to Supabase storage
       const { data, error } = await supabase.storage
-        .from('sources')
+        .from(bucket === 'knowledge-files' ? 'knowledge-files' : 'sources')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false
