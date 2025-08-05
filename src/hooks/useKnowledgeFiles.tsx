@@ -37,7 +37,7 @@ export const useKnowledgeFiles = () => {
     error,
     isError,
   } = useQuery({
-    queryKey: ['knowledge-files', user?.id],
+    queryKey: ['sources', user?.id],
     queryFn: async () => {
       if (!user) {
         console.log('No user found, returning empty files array');
@@ -100,7 +100,7 @@ export const useKnowledgeFiles = () => {
           console.log('Real-time knowledge file update received:', payload);
           
           // Invalidate and refetch files when any change occurs
-          queryClient.invalidateQueries({ queryKey: ['knowledge-files', user.id] });
+          queryClient.invalidateQueries({ queryKey: ['sources', user.id] });
         }
       )
       .subscribe();
@@ -150,7 +150,7 @@ export const useKnowledgeFiles = () => {
       const filePath = `${user.id}/${fileRecord.id}.${fileExtension}`;
       
       const { error: uploadError } = await supabase.storage
-        .from('knowledge-files')
+        .from('sources')
         .upload(filePath, fileData.file);
 
       if (uploadError) {
@@ -193,7 +193,7 @@ export const useKnowledgeFiles = () => {
       return updatedFile;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['knowledge-files', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['sources', user?.id] });
     },
   });
 
@@ -209,7 +209,7 @@ export const useKnowledgeFiles = () => {
       // Delete from storage if file path exists
       if (file?.file_path) {
         await supabase.storage
-          .from('knowledge-files')
+          .from('sources')
           .remove([file.file_path]);
       }
 
@@ -224,7 +224,7 @@ export const useKnowledgeFiles = () => {
       return fileId;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['knowledge-files', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['sources', user?.id] });
     },
   });
 
@@ -244,7 +244,7 @@ export const useKnowledgeFiles = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['knowledge-files', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['sources', user?.id] });
     },
   });
 
