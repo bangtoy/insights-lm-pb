@@ -31,7 +31,7 @@ serve(async (req) => {
 
     // Update file status to processing
     await supabaseClient
-      .from('knowledge_files')
+      .from('sources')
       .update({ processing_status: 'processing' })
       .eq('id', fileId)
 
@@ -43,7 +43,7 @@ serve(async (req) => {
       console.error('Missing DOCUMENT_PROCESSING_WEBHOOK_URL environment variable')
       
       await supabaseClient
-        .from('knowledge_files')
+        .from('sources')
         .update({ processing_status: 'failed' })
         .eq('id', fileId)
 
@@ -89,7 +89,7 @@ serve(async (req) => {
       console.error('Webhook call failed:', response.status, errorText);
       
       await supabaseClient
-        .from('knowledge_files')
+        .from('sources')
         .update({ processing_status: 'failed' })
         .eq('id', fileId)
 
