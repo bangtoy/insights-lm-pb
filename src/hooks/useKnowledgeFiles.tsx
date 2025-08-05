@@ -48,7 +48,7 @@ export const useKnowledgeFiles = () => {
       
       // Get files with chunk counts
       const { data: filesData, error: filesError } = await supabase
-        .from('knowledge_files')
+        .from('sources')
         .select(`
           *,
           chunks:file_chunks(count)
@@ -93,7 +93,7 @@ export const useKnowledgeFiles = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'knowledge_files',
+          table: 'sources',
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
@@ -125,7 +125,7 @@ export const useKnowledgeFiles = () => {
 
       // First create the file record
       const { data: fileRecord, error: createError } = await supabase
-        .from('knowledge_files')
+        .from('sources')
         .insert({
           title: fileData.title,
           file_type: fileData.file_type,
@@ -156,13 +156,13 @@ export const useKnowledgeFiles = () => {
       if (uploadError) {
         console.error('Error uploading file:', uploadError);
         // Clean up the database record
-        await supabase.from('knowledge_files').delete().eq('id', fileRecord.id);
+        await supabase.from('sources').delete().eq('id', fileRecord.id);
         throw uploadError;
       }
 
       // Update file record with path
       const { data: updatedFile, error: updateError } = await supabase
-        .from('knowledge_files')
+        .from('sources')
         .update({ 
           file_path: filePath,
           processing_status: 'processing'
@@ -201,7 +201,7 @@ export const useKnowledgeFiles = () => {
     mutationFn: async (fileId: string) => {
       // Get file details first
       const { data: file } = await supabase
-        .from('knowledge_files')
+        .from('sources')
         .select('file_path')
         .eq('id', fileId)
         .single();
@@ -215,7 +215,7 @@ export const useKnowledgeFiles = () => {
 
       // Delete file record (this will cascade delete chunks)
       const { error } = await supabase
-        .from('knowledge_files')
+        .from('sources')
         .delete()
         .eq('id', fileId);
 
@@ -234,7 +234,7 @@ export const useKnowledgeFiles = () => {
       updates: { title?: string; metadata?: any } 
     }) => {
       const { data, error } = await supabase
-        .from('knowledge_files')
+        .from('sources')
         .update(updates)
         .eq('id', fileId)
         .select()
